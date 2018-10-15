@@ -53,8 +53,8 @@ def get_chunks(data, size):
 def get_series_dates(data):
     def convert_dates(series_dates):
         for date in get_chunks(series_dates, 8):
-            date = date[:-2]
-            date = [binascii.b2a_hex(bytes([b])).decode("ascii") for b in date]
+            date = date[:-2] # TODO: find out what these bytes do (always b'012c')
+            date = [binascii.b2a_hex(bytes([b])).decode("ascii") for b in date] # TODO: make this less ugly
             year, month, day, hour, minute, second = [int(d) for d in date]
             yield(datetime.datetime(2000+year, month, day, hour, minute, second))
     return convert_dates(get_field(data, "series_dates"))
@@ -68,12 +68,15 @@ if __name__ == "__main__":
     vendor_id = 0x10c4
     product_id = 0x8468
     timeout_ms = 1000
+    sample_interval_minutes = 5 # TODO: read from datasets
     hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
 
-    data = create_dump(hd)
-    #with open("dump.bin",'wb') as f:
-    #    f.write(data)
-    #data = open("dump.bin",'rb').read()
+    if (len(sys.argv) == 2):
+        #with open("dump.bin",'wb') as f:
+        #    f.write(data)
+        data = open(sys.argv[1],'rb').read()
+    else:
+        data = create_dump(hd)
 
     if (int.from_bytes(get_field(data, "init_ok"), byteorder='big') != 0x55aa):
         raise RuntimeError("Incorrect device ROM magic number. This software is not meant to be used with your device.")
@@ -81,6 +84,8 @@ if __name__ == "__main__":
          raise RuntimeError("Unknown model number.")
     
     sys.stderr.write("Device ID: %s\n"%(binascii.b2a_hex(get_field(data, "ID")).decode("ascii")))
+    if (binascii.b2a_hex(get_field(data, "settings")) != b'2d012c006414'):
+        sys.stderr.write("WARNING: Unknown settings detected (only the exact combination of 24h format, degrees celsius, and 5 minute sample interval was tested). Expect havoc.\n"%())
 
     if False:
         for field in mmap.keys():
@@ -96,10 +101,9 @@ if __name__ == "__main__":
     for series_count, series_start_date in zip(series_counts, series_dates):
         for i in range(64):
             humidity, temperature = convert_measurement(next(measurements))
-            if (i > series_count):
-                pass
-            else:
-                pass
+            if (i <= series_count):
                 number += 1
-                measurement_date = series_start_date+datetime.timedelta(minutes=5*i)
+                measurement_date = series_start_date+datetime.timedelta(
+                    minutes=sample_interval_minutes*i
+                )
                 print(" %d\t %s\t %.1f\t %d\r"%(number, measurement_date, temperature, humidity))
