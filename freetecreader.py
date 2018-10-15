@@ -90,14 +90,17 @@ if __name__ == "__main__":
     measurements = get_chunks(data[mmap["series"][0]:], 3)
     number = 0
     print("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r")
-    for series_start_date, series_count in zip(series_dates, series_counts):
+    for series_count, series_start_date in zip(series_counts, series_dates):
         for i in range(64):
+            humidity, temperature = convert_measurement(next(measurements))
+            #print(number, series_start_date, i, binascii.b2a_hex(next(measurements)))
             if (i > series_count):
-                print("ignored")
+                pass
+                #print("^^ ignored")
             else:
+                pass
                 number += 1
                 measurement_date = series_start_date+datetime.timedelta(minutes=5*i)
-                humidity, temperature = convert_measurement(next(measurements))
                 print(" %d\t %s\t %.1f\t %d\r"%(number, measurement_date, temperature, humidity))
-                #print(series_start_date, i, binascii.b2a_hex(next(measurements)))
+                
                 
