@@ -20,55 +20,33 @@ def request(hd, addr = None, length = None, msg_bytes = None):
     answer = answer[:length]
     return answer
 
+def create_dump(hd):
+    length = 32
+    first_addr = 0x0000
+    last_addr = 0x2000 # actually 0xFFFF
+    answer = b''
+    for addr in range(first_addr, last_addr, length):
+        answer += request(hd, addr, length)
+        sys.stdout.write("\rReading from device… %d%%"%(int(addr/last_addr*100)))
+    sys.stdout.write("\nDone.\n")
+    return answer
+
 if __name__ == "__main__":
     vendor_id = 0x10c4
     product_id = 0x8468
     timeout_ms = 1000
     hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
+
+    data = create_dump(hd)
+    with open("dump.bin",'wb') as f:
+        f.write(data)
+
     mmap = {
         "init ok"  : (0x00, 2),
         "model"    : (0x02, 2),
         "ID"       : (0x05, 4),
         "settings" : (0x09, 6)
     }
-    
     #for field, (addr, length) in mmap.items():
     #    answer = request(hd, addr, length)
-    #    print("%s: %s"%(field, binascii.b2a_hex(answer[:length])))
-
-    length = 32
-    first_addr = 0x0000
-    last_addr = 0x2000 # actually 0xFFFF
-    with open("dump.bin",'wb') as f:
-        for addr in range(first_addr, last_addr, length):
-            answer = request(hd, addr, length)
-            f.write(answer)
-            sys.stdout.write("\rReading from device… %d%%"%(int(addr/last_addr*100)))
-    sys.stdout.write("\nDone.\n")
-
-    #length = 16
-    #for addr in range(0, 0x100, length):
-    #    answer = request(hd, addr, length)
-    #    print(binascii.b2a_hex(answer[:length]))
-    #for addr in range(0x100, 0xD00, length):
-    #    answer = request(hd, addr, length)
-    #    print(binascii.b2a_hex(answer[:length]))
-    #length = 0x27
-    #for addr in range(0x0D00, 0x2000, length):
-    #    answer = request(hd, addr, length)
-    #    print(binascii.b2a_hex(answer[:length]))
-
-    #0206010000500657
-    #0206010000581b74
-    #020601000058025b
-    #02060100019c08a6
-    #0206010001a408ae
-    #020601000d9c24ce
-    #020601000d002735
-    #020601000d27275c # c_ paket 39
-    #020601000d4e2783
-    #020601000d7527aa
-    #020601000dc027f5
-    #020601000de7271c
-    #020601000e0e2744
-    #020601000e351256
+    #    print("%s: %s"%(field, binascii.b2a_hex(answer)))
