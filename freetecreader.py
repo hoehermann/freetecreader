@@ -68,13 +68,19 @@ if __name__ == "__main__":
     vendor_id = 0x10c4
     product_id = 0x8468
     timeout_ms = 1000
-    sample_interval_minutes = 5 # TODO: read from datasets
+    sample_interval_minutes = 5 # TODO: read interval from settings/datasets
     hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
 
-    if (len(sys.argv) == 2):
-        #with open("dump.bin",'wb') as f:
-        #    f.write(data)
-        data = open(sys.argv[1],'rb').read()
+    data = None
+    if (len(sys.argv) == 3):
+        if (sys.argv[1] == "dump"):
+            data = create_dump(hd)
+            with open(sys.argv[2],'wb') as f:
+                f.write(data)
+        elif (sys.argv[1] == "read"):
+            data = open(sys.argv[2],'rb').read()
+        else:
+            raise RuntimeError("Option is neither 'dump' nor 'read'.")
     else:
         data = create_dump(hd)
 
