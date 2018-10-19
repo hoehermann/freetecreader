@@ -32,8 +32,7 @@ def create_dump(hd):
     sys.stderr.write("\nDone.\n")
     return answer
 
-
-mmap = {
+memory_map = {
     "init_ok"       : (0x00, 2),
     "model"         : (0x02, 2),
     "ID"            : (0x05, 4),
@@ -44,7 +43,7 @@ mmap = {
     "series"        : (0xD00, 0xFFFF-0xD00) # TODO: find out actual length (this is a guess)
 }
 def get_field(data, field):
-    addr, length = mmap[field]
+    addr, length = memory_map[field]
     return data[addr:addr+length]
 
 def get_chunks(data, size):
@@ -54,7 +53,7 @@ def get_series_dates(data):
     def convert_dates(series_dates):
         for date in get_chunks(series_dates, 8):
             date = date[:-2] # TODO: find out what these bytes do (always b'012c')
-            date = [binascii.b2a_hex(bytes([b])).decode("ascii") for b in date] # TODO: make this less ugly
+            date = ["%02x"%(b) for b in date]
             year, month, day, hour, minute, second = [int(d) for d in date]
             yield(datetime.datetime(2000+year, month, day, hour, minute, second))
     return convert_dates(get_field(data, "series_dates"))
@@ -68,40 +67,49 @@ if __name__ == "__main__":
     vendor_id = 0x10c4
     product_id = 0x8468
     timeout_ms = 1000
-    sample_interval_minutes = 5 # TODO: read interval from settings/datasets
-    hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
+    sample_interval_minutes = 5 # TODO: read interval from settings or rather datasets
 
-    data = None
+    mode = "device"
     if (len(sys.argv) == 3):
-        if (sys.argv[1] == "dump"):
-            data = create_dump(hd)
+        if (sys.argv[1] in ["dump", "read"]):
+            mode = sys.argv[1]
+        else:
+            raise RuntimeError("Unknown command-line arguments.")
+
+    data = None # TODO: in device mode, data should be supplied by a generator, lazily reading on-demand only
+    if (mode in ["device", "dump"]):
+        hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
+        data = create_dump(hd)
+        if (mode == "dump"):
             with open(sys.argv[2],'wb') as f:
                 f.write(data)
-        elif (sys.argv[1] == "read"):
-            data = open(sys.argv[2],'rb').read()
-        else:
-            raise RuntimeError("Option is neither 'dump' nor 'read'.")
     else:
-        data = create_dump(hd)
+        data = open(sys.argv[2],'rb').read()
 
-    if (int.from_bytes(get_field(data, "init_ok"), byteorder='big') != 0x55aa):
-        raise RuntimeError("Incorrect device ROM magic number. This software is not meant to be used with your device.")
+    init_ok = int.from_bytes(get_field(data, "init_ok"), byteorder='big')
+    if (init_ok != 0x55aa):
+        raise RuntimeError("Incorrect device ROM magic number (is %04x, should be 55aa). This software is not meant to be used with your device."%(init_ok))
     if (int.from_bytes(get_field(data, "model"), byteorder='big') != 0x0201):
          raise RuntimeError("Unknown model number.")
     
-    sys.stderr.write("Device ID: %s\n"%(binascii.b2a_hex(get_field(data, "ID")).decode("ascii")))
-    if (binascii.b2a_hex(get_field(data, "settings")) != b'2d012c006414'):
-        sys.stderr.write("WARNING: Unknown settings detected (only the exact combination of 24h format, degrees celsius, and 5 minute sample interval was tested). Expect havoc.\n"%())
+    sys.stderr.write(
+        "Device ID: %s\n"%(binascii.hexlify(get_field(data, "ID")).decode("ascii"))
+    )
+    if (get_field(data, "settings") != binascii.unhexlify('2d012c006414')):
+        sys.stderr.write("WARNING: Unknown settings detected (only the exact combination of 24h format, degrees celsius, and 5 minute sample interval was tested). Expect havoc.\n")
 
     if False:
-        for field in mmap.keys():
+        for field in memory_map.keys():
             if "series" not in field:
-                print("%s: %s"%(field, binascii.b2a_hex(get_field(data, field)).decode("ascii")))
+                print("%s: %s"%(
+                    field, 
+                    binascii.hexlify(get_field(data, field)).decode("ascii")
+                ))
 
     series_counts = get_field(data, "series_counts")
     series_counts = [sc for sc in series_counts if sc != 0xFF]
     series_dates = get_series_dates(data)
-    measurements = get_chunks(data[mmap["series"][0]:], 3)
+    measurements = get_chunks(data[memory_map["series"][0]:], 3)
     number = 0
     print("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r")
     for series_count, series_start_date in zip(series_counts, series_dates):
