@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     init_ok = int.from_bytes(get_field(data, "init_ok"), byteorder='big')
     if (init_ok != 0x55aa):
-        raise RuntimeError("Incorrect device ROM magic number (is %04x, should be 55aa). This software is not meant to be used with your device."%(init_ok))
+        raise RuntimeError("Incorrect device ROM magic number (is %04x, should be 55aa). Try again without re-connecting the device. If the error persists, this software is not meant to be used with your device."%(init_ok))
     if (int.from_bytes(get_field(data, "model"), byteorder='big') != 0x0201):
          raise RuntimeError("Unknown model number.")
     
