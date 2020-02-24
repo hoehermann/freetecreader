@@ -11,10 +11,11 @@ import argparse
 
 class FreeTecDevice():
     
-    def __init__(self, vendor_id = 0x10c4, product_id = 0x8468, timeout_ms = 1000, data = b''):
+    def __init__(self, vendor_id = 0x10c4, product_id = 0x8468, timeout_ms = 1000, data = b'', debug = False):
         self.timeout_ms = timeout_ms
         self.hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
         self.data = data
+        self.debug = debug
         self.generator = self._generator()
         first_chunk = next(self.generator)
         init_ok = int.from_bytes(self.get_field("init_ok"), byteorder='big')
@@ -35,11 +36,12 @@ class FreeTecDevice():
         first_addr = 0x0000
         last_addr = 0xFFFF
         for addr in range(first_addr, last_addr, length):
-            #sys.stderr.write("\rReading from device… %d%%"%(int(addr/last_addr*100)))
+            if (self.debug):
+                sys.stderr.write("\rReading from device… %d%%"%(int(addr/last_addr*100)))
             data = self._request(addr, length)
             self.data += data
             yield data
-        #sys.stderr.write("\nDone.\n")
+        sys.stderr.write("\nDone.\n")
 
     def _request(self, addr = None, length = None, msg_bytes = None):
         if (not msg_bytes):
@@ -108,16 +110,17 @@ class FreeTecDevice():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dump", help="dump raw binary to file", action="store_true")
-    parser.add_argument("--csv", help="write interpreted csv to file", action="store_true")
-    parser.add_argument("--suffix", help="suffix to add to output filenames", type=str, default="")
-    parser.add_argument("--data", help="read raw binary dump", type=str)
+    parser.add_argument("--dump", help="Dump raw binary to file", action="store_true")
+    parser.add_argument("--csv", help="Write interpreted csv to file", action="store_true")
+    parser.add_argument("--suffix", help="Suffix to add to output filenames", type=str, default="")
+    parser.add_argument("--data", help="Read raw binary dump", type=str)
+    parser.add_argument("--debug", help="Have debug output on stderr", action="store_true")
     args = parser.parse_args()
     
     data = b''
     if (args.data):
         data = open(args.data,'rb').read()
-    ftd = FreeTecDevice(data = data)
+    ftd = FreeTecDevice(data = data, debug = args.debug)
     sys.stderr.write(
         "Device ID: %s\n"%(ftd.id_str)
     )
