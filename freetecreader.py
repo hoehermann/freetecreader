@@ -4,6 +4,7 @@ import hidapi
 import binascii
 import sys
 import datetime
+import argparse
 #from itertools import islice
 
 # TODO: read lazily everywhere
@@ -106,19 +107,27 @@ class FreeTecDevice():
         return convert_dates(self.get_field("series_dates"))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dump", help="dump raw binary to file", action="store_true")
+    parser.add_argument("--csv", help="write interpreted csv to file", action="store_true")
+    parser.add_argument("--suffix", help="suffix to add to output filenames", type=str, default="")
+    parser.add_argument("--data", help="read raw binary dump", type=str)
+    args = parser.parse_args()
+    
     data = b''
-    if (len(sys.argv) == 2):
-        data = open(sys.argv[1],'rb').read()
+    if (args.data):
+        data = open(args.data,'rb').read()
     ftd = FreeTecDevice(data = data)
     sys.stderr.write(
         "Device ID: %s\n"%(ftd.id_str)
     )
-    with open('%s.csv'%(ftd.id_str),'w') as f:
-        f.write("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r")
-        for m in ftd.get_measurements():
-            f.write(" %d\t %s\t %.1f\t %d\r"%m)
-    if (len(sys.argv) == 1):
-        with open('%s.bin'%(ftd.id_str),'wb') as f:
+    if (args.csv):
+        with open('%s%s.csv'%(ftd.id_str, args.suffix),'w') as f:
+            f.write("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r")
+            for m in ftd.get_measurements():
+                f.write(" %d\t %s\t %.1f\t %d\r"%m)
+    if (args.dump):
+        with open('%s%s.bin'%(ftd.id_str, args.suffix),'wb') as f:
             f.write(ftd.data)
 
     if False:
