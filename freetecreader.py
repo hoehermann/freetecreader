@@ -12,10 +12,12 @@ import argparse
 class FreeTecDevice():
     
     def __init__(self, vendor_id = 0x10c4, product_id = 0x8468, timeout_ms = 1000, data = b'', debug = False):
-        self.timeout_ms = timeout_ms
-        self.hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
-        self.data = data
         self.debug = debug
+        self.data = data
+        self.hd = None
+        if (not self.data):
+            self.timeout_ms = timeout_ms
+            self.hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
         self.generator = self._generator()
         first_chunk = next(self.generator)
         init_ok = int.from_bytes(self.get_field("init_ok"), byteorder='big')
@@ -27,21 +29,29 @@ class FreeTecDevice():
         self.id = self.get_field("ID")
         self.id_str = binascii.hexlify(self.id).decode("ascii")
         self.settings = self.get_field("settings")
-        if (self.settings != binascii.unhexlify('2d012c006414')):
-            sys.stderr.write("WARNING: Unknown settings detected (only the exact combination of 24h format, degrees celsius, and 5 minute sample interval was tested). Expect havoc.\n")
-        self.sample_interval_minutes = 5 # TODO: read interval from settings (or datasets if possible)
+        #self.current_interval_seconds = int.from_bytes(self.settings[1:3], byteorder='big') # not actually used anywhere – measurement series store the interval they were recorded at
+        # TODO: move this offset into memory_map?
+        if (self.settings[0] != 0x2d or self.settings[3:] != binascii.unhexlify('006414')):
+            sys.stderr.write("WARNING: Unknown settings detected (only 24h format with degrees celsius was tested). Expect havoc.\n")
         
     def _generator(self):
         length = 32
         first_addr = 0x0000
         last_addr = 0xFFFF
-        for addr in range(first_addr, last_addr, length):
+        if (self.hd):
+            for addr in range(first_addr, last_addr, length):
+                if (self.debug):
+                    sys.stderr.write("\rReading from device… %d%%"%(int(addr/last_addr*100)))
+                data = self._request(addr, length)
+                self.data += data
+                yield data
             if (self.debug):
-                sys.stderr.write("\rReading from device… %d%%"%(int(addr/last_addr*100)))
-            data = self._request(addr, length)
-            self.data += data
-            yield data
-        sys.stderr.write("\nDone.\n")
+                sys.stderr.write("\nDone.\n")
+        else:
+            if (self.debug):
+                sys.stderr.write("\rReading from dump…\n")
+            for addr in range(first_addr, last_addr, length):
+                yield self.data[addr:addr+length]
 
     def _request(self, addr = None, length = None, msg_bytes = None):
         if (not msg_bytes):
@@ -82,30 +92,31 @@ class FreeTecDevice():
     def get_measurements(self):
         series_counts = self.get_field("series_counts")
         series_counts = [sc for sc in series_counts if sc != 0xFF]
-        series_dates = self._get_series_dates()
+        series_dates = self._get_series_properties()
         measurements = self._get_chunks(self.get_field("series"), 3)
         def convert_measurement(measurement):
             humidity = int(measurement[0])-20
             temperature = int.from_bytes(measurement[1:3], byteorder='big')*0.1-50
             return (humidity, temperature)
-        number = 0
-        for series_count, series_start_date in zip(series_counts, series_dates):
+        for series_count, (series_start_date, series_interval) in zip(series_counts, series_dates):
             for i in range(64):
                 humidity, temperature = convert_measurement(next(measurements))
                 if (i <= series_count):
-                    number += 1
-                    measurement_date = series_start_date+datetime.timedelta(
-                        minutes=self.sample_interval_minutes*i
-                    )
-                    yield (number, measurement_date, temperature, humidity)
+                    measurement_date = series_start_date+series_interval*i
+                    yield (measurement_date, temperature, humidity)
 
-    def _get_series_dates(self):
+    def _get_series_properties(self):
         def convert_dates(series_dates):
-            for date in self._get_chunks(series_dates, 8):
-                date = date[:-2] # TODO: find out what these bytes do (always b'012c')
+            for date_interval in self._get_chunks(series_dates, 8):
+                # thanks to kollokollo for https://github.com/hoehermann/freetecreader/issues/1
+                interval = date_interval[-2:]
+                interval = int.from_bytes(interval, byteorder='big')
+                interval = datetime.timedelta(seconds=interval)
+                date = date_interval[:-2]
                 date = ["%02x"%(b) for b in date]
                 year, month, day, hour, minute, second = [int(d) for d in date]
-                yield datetime.datetime(2000+year, month, day, hour, minute, second)
+                date = datetime.datetime(2000+year, month, day, hour, minute, second)
+                yield (date, interval)
         return convert_dates(self.get_field("series_dates"))
 
 if __name__ == "__main__":
@@ -126,9 +137,9 @@ if __name__ == "__main__":
     )
     if (args.csv):
         with open('%s%s.csv'%(ftd.id_str, args.suffix),'w') as f:
-            f.write("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r")
-            for m in ftd.get_measurements():
-                f.write(" %d\t %s\t %.1f\t %d\r"%m)
+            f.write("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r\n")
+            for i, m in enumerate(sorted(ftd.get_measurements(), key=lambda m:m[0])):
+                f.write(" %d\t %s\t %.1f\t %d\r\n"%(i+1, *m))
     if (args.dump):
         with open('%s%s.bin'%(ftd.id_str, args.suffix),'wb') as f:
             f.write(ftd.data)
