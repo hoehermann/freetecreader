@@ -74,9 +74,10 @@ class FreeTecDevice():
         "model"         : (0x02, 2),
         "ID"            : (0x05, 4),
         "settings"      : (0x09, 6),
-        "unknown"       : (0x50, 6),
-        "series_counts" : (0x58, 323), # TODO: find out actual length (this is a guess)
-        "series_dates"  : (0x19C, 2915), # TODO: find out actual length (this is a guess)
+        "unknown_1"     : (0x50, 6),
+        "series_counts" : (0x58, 324), # adjusted with help from kollokollo at https://github.com/hoehermann/freetecreader/issues/2
+        "series_dates"  : (0x19C, 2592), # see above
+        "unknown_2"     : (0xBBC, 324), # see above
         "series"        : (0xD00, 0xFFFF-0xD00) # TODO: find out actual length (this is a guess)
     }
     def get_field(self, field):
@@ -123,6 +124,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dump", help="Dump raw binary to file", action="store_true")
     parser.add_argument("--csv", help="Write interpreted csv to file", action="store_true")
+    parser.add_argument("--noindex", help="Do not write explicit index into csv", action="store_true")
     parser.add_argument("--suffix", help="Suffix to add to output filenames", type=str, default="")
     parser.add_argument("--data", help="Read raw binary dump", type=str)
     parser.add_argument("--debug", help="Have debug output on stderr", action="store_true")
@@ -137,9 +139,13 @@ if __name__ == "__main__":
     )
     if (args.csv):
         with open('%s%s.csv'%(ftd.id_str, args.suffix),'w') as f:
-            f.write("Nummer	Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r\n")
+            if (not args.noindex):
+                f.write("Nummer	")
+            f.write("Aufzeichnungszeit	Temperatur(°C)	Luftfeuchtigkeit(%)\r\n")
             for i, m in enumerate(sorted(ftd.get_measurements(), key=lambda m:m[0])):
-                f.write(" %d\t %s\t %.1f\t %d\r\n"%(i+1, *m))
+                if (not args.noindex):
+                    f.write(" %d\t"%(i+1))
+                f.write(" %s\t %.1f\t %d\r\n"%m)
     if (args.dump):
         with open('%s%s.bin'%(ftd.id_str, args.suffix),'wb') as f:
             f.write(ftd.data)
