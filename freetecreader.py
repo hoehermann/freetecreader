@@ -17,7 +17,8 @@ class FreeTecDevice():
         self.hd = None
         if (not self.data):
             self.timeout_ms = timeout_ms
-            self.hd = hidapi.Device(vendor_id=vendor_id, product_id=product_id)
+            deviceInfo = next(hidapi.enumerate(vendor_id=vendor_id, product_id=product_id))
+            self.hd = hidapi.Device(info=deviceInfo)
         self.generator = self._generator()
         first_chunk = next(self.generator)
         init_ok = int.from_bytes(self.get_field("init_ok"), byteorder='big')
