@@ -1,5 +1,7 @@
 # freetecreader
-Dies ist eine Quelloffene Lesesoftware für den [FreeTec NC7004 "USB-Temperatur- &amp; Luftfeuchtigkeits-Datenlogger V2"](http://www.free-tec.de/USB-Temperatur-NC-7004-919.shtml) von [Pearl](https://www.pearl.de/a-NC7004-3044.shtml).
+Dies ist eine Quelloffene Lesesoftware für den [FreeTec/infactory NC7004 "USB-Temperatur- &amp; Luftfeuchtigkeits-Datenlogger V2"](http://www.free-tec.de/USB-Temperatur-NC-7004-919.shtml) von [Pearl](https://www.pearl.de/a-NC7004-3044.shtml).
+
+<p align="center"><img src="product_photo.jpg" alt="NC-7004 Produktphoto von Pearl" /></p>
 
 Die offizielle Software für den NC7004 heißt "DataLogger3.3". Die Software verwendet eine Variante der "EasyWeather" Bibliothek.
 Der NC7004 ist allerdings nicht protokollkompatibel mit den [populären WH1080 Wetterstationen](http://www.weewx.com/hwcmp.html).
